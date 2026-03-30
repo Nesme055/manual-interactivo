@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual Interactivo Automático</title>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://rawcdn.githack.com/blasten/turn.js/master/turn.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #1a1d23;
+            --sidebar-color: #252932;
+            --accent-color: #4a90e2;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .top-controls {
+            position: absolute;
+            top: 20px;
+            right: 240px;
+            z-index: 1000;
+        }
+
+        .btn-download {
+            background: var(--accent-color);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #album { box-shadow: 0 20px 50px rgba(0,0,0,0.5); display: none; }
+        #album .page { background-color: white; line-height: 0; }
+        canvas { width: 100%; height: 100%; }
+
+        .sidebar {
+            width: 220px;
+            background-color: var(--sidebar-color);
+            border-left: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .sidebar-header { color: white; text-align: center; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 15px; }
+        .thumb { width: 100%; margin-bottom: 10px; cursor: pointer; border: 2px solid transparent; border-radius: 4px; overflow: hidden; }
+        .thumb:hover { border-color: var(--accent-color); }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 2000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader" class="loading-overlay">Cargando Manual...</div>
+
+    <div class="top-controls">
+        <a href="L2.pdf" class="btn-download" download>📥 Descargar PDF Original</a>
+    </div>
+
+    <div class="main-container">
+        <div id="album"></div>
+    </div>
+
+    <div class="sidebar">
+        <div class="sidebar-header">Páginas</div>
+        <div id="thumbs-container"></div>
+    </div>
+
+    <script>
+        const PDF_URL = "L2.pdf";
+        // CORRECCIÓN AQUÍ: Nombre correcto de la librería
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        async function cargarLibro() {
+            try {
+                const pdf = await pdfjsLib.getDocument(PDF_URL).promise;
+                const totalPages = pdf.numPages;
+
+                for (let i = 1; i <= totalPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.5 });
+
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+                    const pageDiv = $('<div class="page"></div>').append(canvas);
+                    $('#album').append(pageDiv);
+
+                    const thumbCanvas = document.createElement('canvas');
+                    const thumbContext = thumbCanvas.getContext('2d');
+                    const thumbVp = page.getViewport({ scale: 0.3 });
+                    thumbCanvas.height = thumbVp.height;
+                    thumbCanvas.width = thumbVp.width;
+                    await page.render({ canvasContext: thumbContext, viewport: thumbVp }).promise;
+
+                    const thumbDiv = $('<div class="thumb"></div>').append(thumbCanvas);
+                    thumbDiv.on('click', () => $('#album').turn('page', i));
+                    $('#thumbs-container').append(thumbDiv);
+                }
+
+                const firstPage = await pdf.getPage(1);
+                const aspect = firstPage.getViewport({scale: 1}).width / firstPage.getViewport({scale: 1}).height;
+                const h = window.innerHeight * 0.8;
+                const w = (h * aspect) * 2;
+
+                $('#album').fadeIn().turn({
+                    width: w,
+                    height: h,
+                    autoCenter: true,
+                    gradients: true
+                });
+
+                $('#loader').fadeOut();
+
+            } catch (error) {
+                console.error("Error al cargar el PDF:", error);
+                $('#loader').text("Error: Asegúrate de usar Live Server y que L2.pdf exista.");
+            }
+        }
+
+        $(document).ready(cargarLibro);
+
+        $(window).bind('keydown', function(e){
+            if (e.keyCode == 37) $('#album').turn('previous');
+            else if (e.keyCode == 39) $('#album').turn('next');
+        });
+    </script>
+</body>
+</html>
